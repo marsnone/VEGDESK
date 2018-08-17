@@ -14,3 +14,5 @@ From any R console with internet access run the following commands to launch you
 library(ghit) # or library(devtools)
 runGitHub("VEGDESK", "marsnone")
 ```
+
+Your browser will launch the shiny app directly on your machine using your default browser.
