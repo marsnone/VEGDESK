@@ -47,14 +47,14 @@ ui <- fluidPage(
                     min = -1, max = 1, value = -.25, step= 0.001)),
       helpText(paste("Number of Clusters:" )),
       fluidRow(
-        numericInput("group", NULL, value=2, min=1, max=Inf, step=1)),
+        numericInput("group", NULL, value=7, min=1, max=Inf, step=1)),
       helpText(paste("Environmental variables to plot:")),
       fluidRow(
         uiOutput("checkbox1")),
       fluidRow(
         uiOutput("checkbox2")),
       fluidRow(
-        checkboxInput("smooth", "Smooth"),
+        checkboxInput("smooth", "Use Anisotropic Smoothing of Environmental Variables"),
                conditionalPanel(
                  condition = "input.smooth == true",
                  sliderInput("knot", "Number of knots/degrees of freedom",
@@ -65,6 +65,14 @@ ui <- fluidPage(
                              list("GACV.Cp", "GCV.Cp", "REML", "P-REML", "ML", "P-ML")),
                  selectInput("smoothingBasis", "Smoothing Basis",
                              list("tp", "ts", "cr", "cs", "ds", "ps", "ad")))),
+      fluidRow(
+        checkboxInput("editpdf", "PDF Plot Parameters"),
+        conditionalPanel(
+          condition = "input.editpdf == true",
+          numericInput("pointSize", "Point Size", value= 12, min=1, max=Inf, step=1),
+          numericInput("long", "Length", value= 15, min=1, max=Inf, step=.1),
+          numericInput("wide", "Width", value= 10, min=1, max=Inf, step=.1))),
+        
       p("Martin O'Neill - 2018")
     ),
     
@@ -158,14 +166,14 @@ server <- function(input, output, session){
     title(ylab="NMDS 2", line=2.5, cex.lab=0.7, xlab="NMDS 1")
     ###Environment
     ef1 <- envfit(bci.mds ~ as.vector(Environmental_Matrix[[input$var1]]), Species_Matrix, permutations = 999, arrow.mul=0.6)
-    plot(ef1, col = "red", cex=0.5)
+    plot(ef1, col = "red", cex=0.5, labels = paste0(input$var1))
     if (input$smooth){
     ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var1]]), Environmental_Matrix, knots = input$knot, add = TRUE, isotropic = FALSE, what = input$wat, method = input$smoothingMethod, bs = input$smoothingBasis)
     } else {
     ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var1]]), Environmental_Matrix, knots = 1, add = TRUE)
     }
     ef2 <- envfit(bci.mds ~ as.vector(Environmental_Matrix[[input$var2]]), Species_Matrix, permutations = 999, arrow.mul=0.6)
-    plot(ef2, col="green", cex=0.5)
+    plot(ef2, col="green", cex=0.5, labels = paste0(input$var2))
     if (input$smooth){
     ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var2]]), Environmental_Matrix, knots = input$knot, add = TRUE, col="green", isotropic = FALSE, what = input$wat, method = input$smoothingMethod, bs = input$smoothingBasis)
     } else {
@@ -198,9 +206,6 @@ server <- function(input, output, session){
   
   
   plotInput <- function(file){
-    #cairo_pdf(filename = file,
-              #width = 18, height = 10, pointsize = 12, family = "sans", bg = "transparent",
-              #antialias = "subpixel",fallback_resolution = 330)
     Species_Matrix <- Species_Matrix()
     Environmental_Matrix <- Environmental_Matrix()
     FlexBeta <- FlexBeta()
@@ -245,7 +250,7 @@ server <- function(input, output, session){
       
       content = function(file){
         cairo_pdf(filename = file,
-                  width = 18, height = 10, pointsize = 8, family = "sans", bg = "transparent",
+                  width = input$wide, height = input$long, pointsize = input$pointSize, family = "sans", bg = "transparent",
                   antialias = c("default", "none", "gray", "subpixel") ,fallback_resolution = 330)
         plotInput(file)
         dev.off()
