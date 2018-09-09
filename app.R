@@ -15,9 +15,7 @@ library(vegan3d)
 library(Cairo)
 library(grDevices)
 
-#THIS ONE MAY SUCK
-
-#runGitHub("VEGDESK", "marsnone" )
+#runGitHub("VEGDESK", "marsnone")
 
 distance <- c("manhattan", "euclidean", "canberra", "bray", "kulczynski", "jaccard", "gower", "morisita", "horn", "mountford", "raup" , "binomial", "chao")
 stand <- c("NULL", "pa", "total", "max", "freq", "hellinger", "log", "chi", "range", "normalize", "standardize")
