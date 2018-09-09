@@ -53,13 +53,25 @@ ui <- fluidPage(
         uiOutput("checkbox1")),
       fluidRow(
         uiOutput("checkbox2")),
+      fluidRow(
+        checkboxInput("smooth", "Smooth"),
+               conditionalPanel(
+                 condition = "input.smooth == true",
+                 sliderInput("knot", "Number of knots/degrees of freedom",
+                             min = 0, max = 10, value = 1, step= 1),
+                 selectInput("wat", "What",
+                             list("contour","persp","gam")),
+                 selectInput("smoothingMethod", "Method",
+                             list("GACV.Cp", "GCV.Cp", "REML", "P-REML", "ML", "P-ML")),
+                 selectInput("smoothingBasis", "Smoothing Basis",
+                             list("tp", "ts", "cr", "cs", "ds", "ps", "ad")))),
       p("Martin O'Neill - 2018")
     ),
     
     
     # Main Panels
     mainPanel(
-      tabsetPanel(
+      tabsetPanel(id ="tabs1",
         tabPanel("Data", DT::dataTableOutput("table")),
         tabPanel("EnviroData", DT::dataTableOutput("table2")),
         tabPanel("NMS Ordination", plotOutput("ordplot"),
@@ -147,10 +159,18 @@ server <- function(input, output, session){
     ###Environment
     ef1 <- envfit(bci.mds ~ as.vector(Environmental_Matrix[[input$var1]]), Species_Matrix, permutations = 999, arrow.mul=0.6)
     plot(ef1, col = "red", cex=0.5)
+    if (input$smooth){
+    ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var1]]), Environmental_Matrix, knots = input$knot, add = TRUE, isotropic = FALSE, what = input$wat, method = input$smoothingMethod, bs = input$smoothingBasis)
+    } else {
     ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var1]]), Environmental_Matrix, knots = 1, add = TRUE)
+    }
     ef2 <- envfit(bci.mds ~ as.vector(Environmental_Matrix[[input$var2]]), Species_Matrix, permutations = 999, arrow.mul=0.6)
     plot(ef2, col="green", cex=0.5)
+    if (input$smooth){
+    ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var2]]), Environmental_Matrix, knots = input$knot, add = TRUE, col="green", isotropic = FALSE, what = input$wat, method = input$smoothingMethod, bs = input$smoothingBasis)
+    } else {
     ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var2]]), Environmental_Matrix, knots = 1, add = TRUE, col="green")
+    }
     for (i in 1:length(grp.lev))
     {points(sit.sc[spe.bw.groups==i,], pch=(14+i), cex=2, col=i+1)}
     ordicluster(p5, spe.bray.ward, col="dark grey", lty=2)     # Add the dendrogram
@@ -197,10 +217,18 @@ server <- function(input, output, session){
     ###Environment
     ef1 <- envfit(bci.mds ~ as.vector(Environmental_Matrix[[input$var1]]), Species_Matrix, permutations = 999, arrow.mul=0.6)
     plot(ef1, col = "red", cex=0.5)
-    ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var1]]), Environmental_Matrix, knots = 1, add = TRUE)
+    if (input$smooth) {
+      ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var1]]), Environmental_Matrix, knots = input$knot, add = TRUE, isotropic = FALSE, what = input$wat, method = input$smoothingMethod, bs = input$smoothingBasis)
+    } else {
+      ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var1]]), Environmental_Matrix, knots = 1, add = TRUE)
+    }
     ef2 <- envfit(bci.mds ~ as.vector(Environmental_Matrix[[input$var2]]), Species_Matrix, permutations = 999, arrow.mul=0.6)
     plot(ef2, col="green", cex=0.5)
-    ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var2]]), Environmental_Matrix, knots = 1, add = TRUE, col="green")
+    if (input$smooth){
+      ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var2]]), Environmental_Matrix, knots = input$knot, add = TRUE, col="green", isotropic = FALSE, what = input$wat, method = input$smoothingMethod, bs = input$smoothingBasis)
+    } else {
+      ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var2]]), Environmental_Matrix, knots = 1, add = TRUE, col="green")
+    }
     for (i in 1:length(grp.lev))
     {points(sit.sc[spe.bw.groups==i,], pch=(14+i), cex=2, col=i+1)}
     ordicluster(p5, spe.bray.ward, col="dark grey", lty=2)     # Add the dendrogram
