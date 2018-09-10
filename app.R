@@ -221,14 +221,14 @@ server <- function(input, output, session){
     title(ylab="NMDS 2", line=2.5, cex.lab=0.7, xlab="NMDS 1")
     ###Environment
     ef1 <- envfit(bci.mds ~ as.vector(Environmental_Matrix[[input$var1]]), Species_Matrix, permutations = 999, arrow.mul=0.6)
-    plot(ef1, col = "red", cex=0.5)
+    plot(ef1, col = "red", cex=0.5, labels = paste0(input$var1))
     if (input$smooth) {
       ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var1]]), Environmental_Matrix, knots = input$knot, add = TRUE, isotropic = FALSE, what = input$wat, method = input$smoothingMethod, bs = input$smoothingBasis)
     } else {
       ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var1]]), Environmental_Matrix, knots = 1, add = TRUE)
     }
     ef2 <- envfit(bci.mds ~ as.vector(Environmental_Matrix[[input$var2]]), Species_Matrix, permutations = 999, arrow.mul=0.6)
-    plot(ef2, col="green", cex=0.5)
+    plot(ef2, col="green", cex=0.5, labels = paste0(input$var2))
     if (input$smooth){
       ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var2]]), Environmental_Matrix, knots = input$knot, add = TRUE, col="green", isotropic = FALSE, what = input$wat, method = input$smoothingMethod, bs = input$smoothingBasis)
     } else {
