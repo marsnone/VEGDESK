@@ -19,30 +19,10 @@ library(shinythemes)
 
 #runGitHub("VEGDESK", "marsnone")
 
-# Call this function with all the regular navbarPage() parameters, plus a text parameter,
-# if you want to add text to the navbar
-navbarPageWithText <- function(..., text) {
-  navbar <- navbarPage(...)
-  textEl <- tags$p(class = "navbar-text", text)
-  navbar[[3]][[1]]$children[[1]] <- htmltools::tagAppendChild(
-    navbar[[3]][[1]]$children[[1]], textEl)
-  navbar
-}
-
-# Call this function with an input (such as `textInput("text", NULL, "Search")`) if you
-# want to add an input to the navbar
-navbarPageWithInputs <- function(..., inputs) {
-  navbar <- navbarPage(...)
-  form <- tags$form(class = "navbar-form", inputs)
-  navbar[[3]][[1]]$children[[1]] <- htmltools::tagAppendChild(
-    navbar[[3]][[1]]$children[[1]], form)
-  navbar
-}
-
 distance <- c("manhattan", "euclidean", "canberra", "bray", "kulczynski", "jaccard", "gower", "morisita", "horn", "mountford", "raup" , "binomial", "chao")
 stand <- c("pa", "total", "max", "freq", "hellinger", "log", "chi", "range", "normalize", "standardize")
 
-ui <- fluidPage(#see: https://rstudio.github.io/shinythemes/
+ui <- fluidPage(#see: https://rstudio.github.io/shinythemes/...
   
   # App title ----
   titlePanel("Vegetation Description and Analysis (VEGDESK)"), # Application title
@@ -63,10 +43,13 @@ ui <- fluidPage(#see: https://rstudio.github.io/shinythemes/
       fluidRow(
         selectInput("Distance", NULL, choices = distance,
                     selected="kulczynski")),
-      helpText(paste("Select Standardisation Method:")),
       fluidRow(
+        checkboxInput("nonstandardised", "Apply Standardisation to Species Matrix"),
+        conditionalPanel(
+          condition = "input.nonstandardised == true",
+          helpText(paste("Select Standardisation Method:")),
         selectInput("Standardisation", NULL, choices = stand,
-                    selected="pa")),
+                    selected="pa"))),
       fluidRow(
         sliderInput("beta", "Flexible Beta:",
                     min = -1, max = 1, value = -.25, step= 0.001)),
@@ -107,6 +90,7 @@ ui <- fluidPage(#see: https://rstudio.github.io/shinythemes/
     # Main Panels
     mainPanel(
       tabsetPanel(id ="tabs1",
+                  #position = "left",
                   tabPanel("Data", DT::dataTableOutput("table")),
                   tabPanel("EnviroData", DT::dataTableOutput("table2")),
                   tabPanel("NMS Ordination", plotOutput("ordplot"),
@@ -193,10 +177,18 @@ server <- function(input, output, session){
       Species_Matrix <- Species_Matrix()
       FlexBeta <- FlexBeta()
       Environmental_Matrix <- Environmental_Matrix()
-      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+      if (input$nonstandardised){
+        bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+      } else {
+        bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
+      }
       demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
       demoflex.hcl <- as.hclust(demoflex)
-      bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+      if (input$nonstandardised){
+        bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+      } else {
+        bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+      }
       spe.bray.ward <- demoflex.hcl
       spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
       grp.lev <- levels(factor(spe.bw.groups))
@@ -225,17 +217,25 @@ server <- function(input, output, session){
       #legend(locator(1), paste("Group",c(1:length(grp.lev))), pch=14+c(1:length(grp.lev)), col=1+c(1:length(grp.lev)), pt.cex=0.75, cex = 0.5, ncol=3)
       points(bci.mds, display = "species", cex = 0.7, pch=21, col="red", bg="yellow")
       ordipointlabel(bci.mds, display = "species", add = TRUE, cex = 0.7, scaling = 8)
-      ordihull (bci.mds, groups = spe.bw.groups, show.group = 1:input$group, col = c("green","red","blue","lightblue","pink","yellow","grey"), draw = 'polygon', label = T, lty=3, cex=0.4, alpha = 0.05)
+      ordihull (bci.mds, groups = spe.bw.groups, show.group = 1:input$group, col = c("red","green","blue","lightblue","pink","yellow","grey"), draw = 'polygon', label = T, lty=3, cex=0.4, alpha = 0.05)
     }, height = 1000, width = 1500)
   
   plotInput <- function(file){
     Species_Matrix <- Species_Matrix()
     Environmental_Matrix <- Environmental_Matrix()
     FlexBeta <- FlexBeta()
-    bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
-    demoflex <- agnes(bc,method='flexible',par.method=FlexBeta)
+    if (input$nonstandardised){
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+    } else {
+      bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
+    }
+    demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
     demoflex.hcl <- as.hclust(demoflex)
-    bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    if (input$nonstandardised){
+      bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    } else {
+      bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    }
     spe.bray.ward <- demoflex.hcl
     spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
     grp.lev <- levels(factor(spe.bw.groups))
@@ -245,7 +245,7 @@ server <- function(input, output, session){
     ###Environment
     ef1 <- envfit(bci.mds ~ as.vector(Environmental_Matrix[[input$var1]]), Species_Matrix, permutations = 999, arrow.mul=0.6)
     plot(ef1, col = "red", cex=0.5, labels = paste0(input$var1))
-    if (input$smooth) {
+    if (input$smooth){
       ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var1]]), Environmental_Matrix, knots = input$knot, add = TRUE, isotropic = FALSE, what = input$wat, method = input$smoothingMethod, bs = input$smoothingBasis)
     } else {
       ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var1]]), Environmental_Matrix, knots = 1, add = TRUE)
@@ -264,7 +264,7 @@ server <- function(input, output, session){
     #legend(locator(1), paste("Group",c(1:length(grp.lev))), pch=14+c(1:length(grp.lev)), col=1+c(1:length(grp.lev)), pt.cex=0.75, cex = 0.5, ncol=3)
     points(bci.mds, display = "species", cex = 0.7, pch=21, col="red", bg="yellow")
     ordipointlabel(bci.mds, display = "species", add = TRUE, cex = 0.7, scaling = 8)
-    ordihull (bci.mds, groups = spe.bw.groups, show.group = 1:input$group, col = c("green","red", "blue","lightblue","pink","yellow","grey"), draw = 'polygon', label = F, lty=3,cex=0.4, alpha = 0.1)
+    ordihull (bci.mds, groups = spe.bw.groups, show.group = 1:input$group, col = c("red","green", "blue","lightblue","pink","yellow","grey"), draw = 'polygon', label = F, lty=3,cex=0.4, alpha = 0.1)
     #dev.off()
   }
   
@@ -297,16 +297,24 @@ server <- function(input, output, session){
   ###demopam
   output$demopam <- renderPlot({
     Species_Matrix <- Species_Matrix()
-    bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    if (input$nonstandardised){
+      bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    } else {
+      bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    }
     demopam <- pam(bci.mds$points,k=input$group)
     par(mfrow=c(2,1))
     plot(demopam)
     par(mfrow=c(1,1))
-  })
+  }, height = 1000, width = 1500)
   
   output$fuzz <- renderPlot({
     Species_Matrix <- Species_Matrix()
-    bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=T, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    if (input$nonstandardised){
+      bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    } else {
+      bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    }
     cfuz <- fanny(bci.mds$points, input$group, memb.exp=1.5)
     ordiplot(bci.mds, dis="si", type="n")
     stars(cfuz$membership, locatio=bci.mds$points[,-3], draw.segm=TRUE, add=TRUE, scale=FALSE, len=0.1)
@@ -325,7 +333,11 @@ server <- function(input, output, session){
   output$coph <- renderPlot({
     Species_Matrix <- Species_Matrix()
     FlexBeta <- FlexBeta()
-    bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
+    if (input$nonstandardised){
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+    } else {
+      bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
+    }
     demoflex <- agnes(bc,method='flexible',par.method=FlexBeta)
     demoflex.hcl <- as.hclust(demoflex)
     corr <- cor(bc,cophenetic(demoflex.hcl))
@@ -337,10 +349,18 @@ server <- function(input, output, session){
   output$gofplot <- renderPlot({
     Species_Matrix <- Species_Matrix()
     FlexBeta <- FlexBeta()
-    bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm = F), distance = input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    if (input$nonstandardised){
+      bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    } else {
+      bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    }
     gof = goodness(bci.mds)
     plot(bci.mds, type="n", main="Site IDs and Associated Goodness of Fit") 
-    bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
+    if (input$nonstandardised){
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+    } else {
+      bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
+    }
     demoflex <- agnes(bc,method='flexible',par.method=FlexBeta)
     demoflex.hcl <- as.hclust(demoflex)
     spe.bray.ward <- demoflex.hcl
@@ -355,7 +375,11 @@ server <- function(input, output, session){
   output$ind <- renderPrint({
     Species_Matrix <- Species_Matrix()
     FlexBeta <- FlexBeta()
-    bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
+    if (input$nonstandardised){
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+    } else {
+      bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
+    }
     demoflex <- agnes(bc,method='flexible',par.method=FlexBeta)
     demoflex.hcl <- as.hclust(demoflex)
     spe.bray.ward <- demoflex.hcl
@@ -381,10 +405,18 @@ server <- function(input, output, session){
   output$ThreeDNMS <- renderUI({
     Species_Matrix <- Species_Matrix()
     FlexBeta <- FlexBeta()
-    bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
+    if (input$nonstandardised){
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+    } else {
+      bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
+    }
     demoflex <- agnes(bc,method='flexible',par.method=FlexBeta)
     demoflex.hcl <- as.hclust(demoflex)
-    bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    if (input$nonstandardised){
+      bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    } else {
+      bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    }
     spe.bray.ward <- demoflex.hcl
     spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
     grp.lev <- levels(factor(spe.bw.groups))
@@ -395,10 +427,18 @@ server <- function(input, output, session){
   output$ThreeDend <- renderPlot({
     Species_Matrix <- Species_Matrix()
     FlexBeta <- FlexBeta()
-    bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
+    if (input$nonstandardised){
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+    } else {
+      bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
+    }
     demoflex <- agnes(bc,method='flexible',par.method=FlexBeta)
     demoflex.hcl <- as.hclust(demoflex)
-    bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    if (input$nonstandardised){
+      bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    } else {
+      bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    }
     spe.bray.ward <- demoflex.hcl
     spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
     orditree3d(bci.mds, demoflex.hcl, display = "sites", type = "t", col = as.numeric(spe.bw.groups+1), choices = 1:2, cex=0.9)
@@ -406,13 +446,21 @@ server <- function(input, output, session){
   
   output$ThreeDim <- renderPlot({
     Species_Matrix <- Species_Matrix()
-    bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    if (input$nonstandardised){
+      bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    } else {
+      bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    }
     ordiplot3d(bci.mds, type='h', main= "NMS in 3 dimensions")
   })
   
   output$mclust <- renderPlot({
     Species_Matrix <- Species_Matrix()
-    bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
+    if (input$nonstandardised){
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+    } else {
+      bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
+    }
     # Run the function to see how many clusters it finds to be optimal, set it to search for at least 1 model and up 20.
     d_clust <- Mclust(as.matrix(bc), G=1:20)
     m.best <- dim(d_clust$z)[2]
@@ -426,10 +474,18 @@ server <- function(input, output, session){
   output$silplot <- renderPlot({
     Species_Matrix <- Species_Matrix()
     FlexBeta <- FlexBeta()
-    bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
+    if (input$nonstandardised){
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+    } else {
+      bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
+    }
     demoflex <- agnes(bc,method='flexible',par.method=FlexBeta)
     demoflex.hcl <- as.hclust(demoflex)
-    bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    if (input$nonstandardised){
+      bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    } else {
+      bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
+    }
     spe.bray.ward <- demoflex.hcl
     spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
     grp.lev <- levels(factor(spe.bw.groups))
