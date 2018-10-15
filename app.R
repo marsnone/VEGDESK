@@ -16,104 +16,221 @@ library(Cairo)
 library(grDevices)
 library(shinycssloaders)
 library(shinythemes)
-
-#runGitHub("VEGDESK", "marsnone")
+library(shinydashboard)
+library(shinydashboardPlus)
 
 distance <- c("manhattan", "euclidean", "canberra", "bray", "kulczynski", "jaccard", "gower", "morisita", "horn", "mountford", "raup" , "binomial", "chao")
 stand <- c("pa", "total", "max", "freq", "hellinger", "log", "chi", "range", "normalize", "standardize")
 
-ui <- fluidPage(#see: https://rstudio.github.io/shinythemes/...
+ui <- shinyUI(
+dashboardPagePlus(
+  dashboardHeaderPlus(title = span(tagList(
+    #icon("leaf"),
+    icon("grain" , lib = "glyphicon"),
+    "VEGDESK")), enable_rightsidebar = TRUE,
+                      rightSidebarIcon = "gears"),
+sidebar <-  dashboardSidebar(
+    sidebarMenu(
+      menuItem("Data", icon = icon("database"), tabName = "Data"
+               #badgeLabel = "new", 
+               #badgeColor = "green"
+      ),
+      menuItem("Explore", tabName = "Explore", icon = icon("dashboard")),
+      menuItem("3-D Mode", tabName = "3D", icon = icon("linode")),
+      menuItem("Metrics", tabName = "Metrics", icon = icon("th")),
+      menuItem("Info", tabName = "Info", icon = icon("info-circle")),
+      menuItem("Support", tabName = "Support", icon = icon("thumbs-up"))
+    )
+  ),
   
-  # App title ----
-  titlePanel("Vegetation Description and Analysis (VEGDESK)"), # Application title
-  # Sidebar layout with input and output definitions ---- 
-  sidebarLayout(
-    # Sidebar panel for inputs ----
-    sidebarPanel(
-      ###File Input  ----
-      fileInput("file1", "Upload Species Data (.csv)",
-                multiple = F,
-                accept = ".csv"),
-      fileInput("file2", "Upload Environmental Data (.csv)",
-                multiple = F,
-                accept = ".csv"),
-      downloadButton("downloadData", label = "Download Example Data"),
+  rightsidebar = 
+  rightSidebar(
+    background = "dark",
+    
+    rightSidebarTabContent(
+      id = 1,
+      title = "Data Transformation",
+      active = TRUE,
+      icon = NULL,
       tags$hr(),
-      helpText(paste("Select dissimilartity/distance:")),
-      fluidRow(
-        selectInput("Distance", NULL, choices = distance,
-                    selected="kulczynski")),
-      fluidRow(
-        checkboxInput("nonstandardised", "Apply Standardisation to Species Matrix"),
-        conditionalPanel(
-          condition = "input.nonstandardised == true",
-          helpText(paste("Select Standardisation Method:")),
-        selectInput("Standardisation", NULL, choices = stand,
-                    selected="pa"))),
-      fluidRow(
-        sliderInput("beta", "Flexible Beta:",
-                    min = -1, max = 1, value = -.25, step= 0.001)),
-      helpText(paste("Number of Clusters:" )),
-      fluidRow(
-        numericInput("group", NULL, value=7, min=1, max=Inf, step=1)),
-      helpText(paste("Environmental variables to plot:")),
-      fluidRow(
-        uiOutput("checkbox1")),
-      fluidRow(
-        uiOutput("checkbox2")),
-      fluidRow(
-        checkboxInput("smooth", "Use Anisotropic Smoothing of Environmental Variables"),
-        conditionalPanel(
-          condition = "input.smooth == true",
-          sliderInput("knot", "Number of knots/degrees of freedom",
-                      min = 0, max = 10, value = 1, step= 1),
-          selectInput("wat", "What",
-                      list("contour","persp","gam")),
-          selectInput("smoothingMethod", "Method",
-                      list("GACV.Cp", "GCV.Cp", "REML", "P-REML", "ML", "P-ML")),
-          selectInput("smoothingBasis", "Smoothing Basis",
-                      list("tp", "ts", "cr", "cs", "ds", "ps", "ad")))),
-      fluidRow(
-        checkboxInput("editpdf", "PDF Plot Parameters"),
-        conditionalPanel(
-          condition = "input.editpdf == true",
-          numericInput("pointSize", "Point Size", value= 12, min=1, max=Inf, step=1),
-          numericInput("long", "Length", value= 15, min=1, max=Inf, step=.1),
-          numericInput("wide", "Width", value= 10, min=1, max=Inf, step=.1))),
-      
-      # Horizontal line ----
+      selectInput("Distance","Select dissimilartity/distance:", choices = distance,
+                  selected="kulczynski"),
+      checkboxInput("nonstandardised", "Apply Standardisation to Species Matrix"),
+      conditionalPanel(
+        condition = "input.nonstandardised == true",
+        selectInput("Standardisation", "Select Standardisation Method:", choices = stand,
+                    selected="pa"))
+    ),
+  
+    rightSidebarTabContent(
+      id = 2,
+      active = TRUE,
+      icon = "wrench",
+      title = "Clustering",
       tags$hr(),
-      
-      p("Martin O'Neill - 2018")
+      sliderInput("beta", "Flexible Beta:",min = -1, max = 1, value = -.25, step= 0.001),
+      numericInput("group", "Number of Clusters:", value=7, min=1, max=Inf, step=1)
     ),
     
-    # Main Panels
-    mainPanel(
-      tabsetPanel(id ="tabs1",
-                  #position = "left",
-                  tabPanel("Data", DT::dataTableOutput("table")),
-                  tabPanel("EnviroData", DT::dataTableOutput("table2")),
-                  tabPanel("NMS Ordination", plotOutput("ordplot"),
-                           downloadLink("downloadPlot", "Download Plot")),
-                  tabPanel("Shepard's Plot", plotOutput("sheplot")),
-                  tabPanel("Goodness of Fit", plotOutput("gofplot")),
-                  tabPanel("Silhouette Plot", plotOutput("silplot")),
-                  tabPanel("Mclust", plotOutput("mclust")),
-                  tabPanel("Cophenetic", plotOutput("coph")),
-                  tabPanel("Indicator Species", verbatimTextOutput("ind")),
-                  tabPanel("Metrics", verbatimTextOutput("metrics")),
-                  tabPanel("3D-Dendrogram", plotOutput("ThreeDend")),
-                  tabPanel("3D-NMDS", plotOutput("ThreeDim")),
-                  tabPanel("3D Interactive NMS", plotOutput("ThreeDNMS")),
-                  tabPanel("Partitioning Around Medoids (PAM)", plotOutput("demopam")),
-                  tabPanel("Species Accumulation Curve", plotOutput("sac")),
-                  tabPanel("Calinski Criterion", plotOutput("calinski")),
-                  tabPanel("Fuzzy Set Ordination", plotOutput("fuzz"))
+    rightSidebarTabContent(
+      id = 3,
+      active = TRUE,
+      icon = NULL,
+      title = "Plot Options",
+      tags$hr(),
+      helpText(paste("Environmental variables to plot:")),
+      uiOutput("checkbox1"),
+      uiOutput("checkbox2"),
+      checkboxInput("smooth", "Use Anisotropic Smoothing of Environmental Variables"),
+      conditionalPanel(
+        condition = "input.smooth == true",
+        sliderInput("knot", "Number of knots/degrees of freedom",
+                    min = 0, max = 10, value = 1, step= 1),
+        selectInput("wat", "What",
+                    list("contour","persp","gam")),
+        selectInput("smoothingMethod", "Method",
+                    list("GACV.Cp", "GCV.Cp", "REML", "P-REML", "ML", "P-ML")),
+        selectInput("smoothingBasis", "Smoothing Basis",
+                    list("tp", "ts", "cr", "cs", "ds", "ps", "ad"))),
+      checkboxInput("editpdf", "Edit PDF Plot Parameters"),
+      conditionalPanel(
+        condition = "input.editpdf == true",
+        numericInput("pointSize", "Point Size", value= 12, min=1, max=Inf, step=1),
+        numericInput("long", "Length", value= 15, min=1, max=Inf, step=.1),
+        numericInput("wide", "Width", value= 10, min=1, max=Inf, step=.1)))
+  ),
+  
+ dashboardBody(
+    tags$head(
+      tags$script(
+        HTML("
+             window.onload = function() {
+             resize();
+             }
+             window.onresize = function() {
+             resize();
+             }
+             Shiny.addCustomMessageHandler ('triggerResize',function (val) {
+             window.dispatchEvent(new Event('resize'));
+             });
+             function resize(){
+             var h = window.innerHeight - $('.navbar').height() - 150; // Get dashboardBody height
+             $('#box').height(h); 
+             }"
+        )
+        )
+        ),
+    tabItems(
+      tabItem(tabName = "Data",
+              
+              fluidRow(
+                box(
+                  title = "Data Upload", width = 6, status = "primary",
+                  fileInput("file1", "Upload Species Data (.csv)",
+                            multiple = F,
+                            accept = ".csv"),
+                  fileInput("file2", "Upload Environmental Data (.csv)",
+                            multiple = F,
+                            accept = ".csv"),
+                  downloadButton("downloadData", label = "Download Example Data")
+                )
+              ),
+              
+              fluidRow(
+                column(width = 12,
+                       box(
+                         title = "Species Data", width = NULL, solidHeader = TRUE, status = "warning",
+                         div(style = 'overflow-x: scroll', DT::dataTableOutput('table'))
+              
+                       ),
+                       box(
+                         title = "Environmental Data", width = NULL, solidHeader = TRUE, status = "success",
+                         div(style = 'overflow-x: scroll', DT::dataTableOutput('table2'))                       )
+              ))),
+      
+      tabItem(tabName = "Metrics",
+      fluidRow(
+        box(title = "Distance/Dissimilarity Metrics",width = 12, status = "info", collapsible = T, verbatimTextOutput("metrics"))
+        ),
+      fluidRow(
+        box(title = "Indicator Species Analysis", width = 12, status = "warning", collapsible = T, verbatimTextOutput("ind"))
       )
-    )
-  )
-)
-# end fluidPage
+      ),      
+      
+      tabItem(tabName = "3D",
+             fluidRow(
+               box(title = "Dendrogram Ordination",width = 12, status = "info", collapsible = T, plotOutput("ThreeDend"))
+             ),
+             fluidRow(
+               box(title = "NM3DS", width = 12, status = "warning", collapsible = T,  plotOutput("ThreeDim"))
+             ),
+             fluidRow(
+               box(title = "Interactive 3D-NMDS", width = 12, status = "primary", collapsible = T, plotOutput("ThreeDNMS"))
+             )
+      ),       
+      
+              tabItem(tabName = "Explore",
+                      fluidRow(
+                        box(
+                          title = "NMS Ordination", width = 12, status = "primary", collapsible = TRUE,
+                          div(style = 'overflow-x: scroll',
+                          plotOutput("ordplot", height = "1000px"),
+                          downloadLink("downloadPlot", "Download Plot"))
+                        )
+                        ),
+                        
+                      fluidRow(
+                        box(
+                          title = "Shepard's Plot", width = 6, solidHeader = TRUE, status = "primary", collapsible = TRUE,
+                                 plotOutput("sheplot")
+                        ),
+                          box(
+                            title="Fuzzy Set Ordination", width = 6, background = "black", collapsible = TRUE,
+                            plotOutput("fuzz")
+                        )
+                        ),
+                        
+                        fluidRow(width = 6,
+                               box(
+                                 title = "Silhouette Plot", width = 8, solidHeader = TRUE, status = "warning", collapsible = TRUE,
+                                 plotOutput("silplot", height = "600px")
+                               ),
+                               box(
+                                 title = "Mclust", width = 4, background = "teal", collapsible = TRUE,
+                                 plotOutput("mclust", height = "600px")
+                          )
+                          ),
+                      
+                      fluidRow(
+                             box(
+                               title = "Cophenetic Correlation", width = 4, background = "green", collapsible = TRUE,
+                               plotOutput("coph")
+                               ),
+                             box(
+                               title = "Goodness of Fit", width = 8, solidHeader = TRUE, collapsible = TRUE, background = "yellow",
+                               plotOutput("gofplot"))
+                               ),
+                      
+                      
+                      fluidRow(
+                             box(
+                               title = "Species Accumulation Curve", width = 6, solidHeader = TRUE, collapsible = TRUE, background = "aqua",
+                               plotOutput("sac")),
+                             box(
+                               title = "Calinski Criterion", width = 6, background = "maroon", collapsible = TRUE,
+                               plotOutput("calinski"))
+                      ),
+                      
+                      fluidRow(
+                        box(
+                          title = "Partitioning Around Medoids (PAM)", width = 12, solidHeader = TRUE, collapsible = TRUE,
+                          div(style = 'overflow-x: scroll',
+                          plotOutput("demopam", height = "1000px"))
+                        )
+                      )
+                      #Valid colors are: red, yellow, aqua, blue, light-blue, green, navy, teal, olive, lime, orange, fuchsia, purple, maroon, black.
+              )))))
+
 
 server <- function(input, output, session){
   
@@ -218,7 +335,7 @@ server <- function(input, output, session){
       points(bci.mds, display = "species", cex = 0.7, pch=21, col="red", bg="yellow")
       ordipointlabel(bci.mds, display = "species", add = TRUE, cex = 0.7, scaling = 8)
       ordihull (bci.mds, groups = spe.bw.groups, show.group = 1:input$group, col = c("red","green","blue","lightblue","pink","yellow","grey"), draw = 'polygon', label = T, lty=3, cex=0.4, alpha = 0.05)
-    }, height = 1000, width = 1500)
+    }, height = 1000, width = 1200)
   
   plotInput <- function(file){
     Species_Matrix <- Species_Matrix()
@@ -466,7 +583,7 @@ server <- function(input, output, session){
     m.best <- dim(d_clust$z)[2]
     cat("model-based optimal number of clusters:", m.best, "\n")
     plot(d_clust, main= "Model-Based Optimal Cluster Number Assessment", what="BIC")
-    title(main = paste("Model-Based Optimal Cluster Number Assessment - Generalised Suggestion =", m.best,"Groups" ))
+    title(main = paste("Model-Based Optimal Cluster Number Assessment:\n Generalised Suggestion =", m.best,"Groups" ))
     
   })
   
@@ -497,13 +614,8 @@ server <- function(input, output, session){
     order<-tibble::rownames_to_column(order)
     order <- order[order(order$spe.bw.groups),] 
     rownames(order)<-order$rowname
-    plot(silo, col=order$spe.bw.groups+1, main = expression(paste("Silhouette plot of Group Membership - Flexible"~beta~"= -0.25, Kulczynski Dissimilarity")), cex.names=0.8, nmax.lab=100)
+    plot(silo, col=order$spe.bw.groups+1, main = expression(paste("Silhouette plot of Group Membership - Flexible"~beta~"=", paste(FlexBeta()), "Dissimilarity/Distance = ", paste(input$Distance))), cex.names=0.8, nmax.lab=100)
   })
 }
-shinyApp(ui=ui, server=server)
 
-#add group colour palette selector
-#null/no standardisation
-#adaptive download button
-#good default plotting parameter (pdf width etc.)
-#
+shinyApp(ui=ui, server=server)
