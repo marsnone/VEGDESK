@@ -3,7 +3,7 @@
 R Shiny App for Vegetation Description and Analysis
 ===============================
 
-`VEGDESK` is an R Shiny Application to 
+`VEGDESK`
 
 Running VEGDESK
 ------------
