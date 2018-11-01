@@ -16,3 +16,8 @@ runGitHub("VEGDESK", "marsnone")
 ```
 
 Your browser will launch the shiny app directly on your machine using your default browser.
+
+## Support on Beerpay
+Hey dude! Help me out for a couple of :beers:!
+
+[![Beerpay](https://beerpay.io/marsnone/VEGDESK/badge.svg?style=beer-square)](https://beerpay.io/marsnone/VEGDESK)  [![Beerpay](https://beerpay.io/marsnone/VEGDESK/make-wish.svg?style=flat-square)](https://beerpay.io/marsnone/VEGDESK?focus=wish)
