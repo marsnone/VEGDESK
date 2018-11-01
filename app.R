@@ -7,6 +7,7 @@ library(ggbiplot)
 library(graphics)
 library(readr)
 library(cluster)
+library(dendextend)
 library(DT)
 library(dygraphs)
 library(mclust)
@@ -20,9 +21,6 @@ library(shinydashboard)
 library(shinydashboardPlus)
 library(logging)
 library(shinyjs)
-
-#basicConfig()
-#options(shiny.error = function() {logging::logerror(sys.calls() %>% as.character %>% paste(collapse = ", ")) })
 
 ####Global####
 
@@ -56,9 +54,34 @@ ui <- shinyUI(
           menuItem("Info", tabName = "Info", icon = icon("info-circle"),
                    menuSubItem("VEGDESK Guide", tabName = "guide", icon = icon("book")),
                    menuSubItem("Supplementary Information", tabName = "supp", icon = icon("university")),
-                   menuSubItem("Contact & Support", tabName = "contact", icon = icon("thumbs-up")))
+                   menuSubItem("Contact & Support", tabName = "contact", icon = icon("thumbs-up"))),
+          hr(),
+          div(class='info',
+              p('Developed by',a("Martin O'Neill",href='https://twitter.com/Martin_O_Neill')),
+               a(icon('twitter fa-2x'),href='https://twitter.com/Martin_O_Neill'),
+              p(
+                HTML("<div style='float:center'>
+                  <a href='https://twitter.com/share' 
+                                           class='twitter-share-button' 
+                                           align='middle' 
+                                           data-url='www.davesteps.com/homebrewR/' 
+                                           data-text='created by @Martin_O_Neill using #rstats and #shiny: davesteps.com/homebrewR/' 
+                                           data-size='large'>Tweet
+                                           </a>
+                                           <script>!function(d,s,id){
+                                           var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';
+                                           if(!d.getElementById(id)){
+                                           js=d.createElement(s);
+                                           js.id=id;
+                                           js.src=p+'://platform.twitter.com/widgets.js';
+                                           fjs.parentNode.insertBefore(js,fjs);
+                                           }
+                                           }(document, 'script', 'twitter-wjs');
+                                           </script>
+                                           </div>")),
+              p(a(icon('github fa-2x'),href='https://github.com/marsnone/vegdesk',target='_blank'))
         )
-      ),
+      )),
     
     ####RightSideBar####
     
@@ -93,7 +116,7 @@ ui <- shinyUI(
                      id = 3,
                      active = TRUE,
                      icon = NULL,
-                     title = "Plot Options",
+                     title = " Main NMS Plot Options",
                      tags$hr(),
                      checkboxInput("smooth", "Use Anisotropic Smoothing of Environmental Variables"),
                      conditionalPanel(condition = "input.smooth == true",
@@ -157,9 +180,9 @@ ui <- shinyUI(
                 ),
                 fluidRow(
                   tabBox(id = "diverse",
-                         tabPanel(title = "Shannon's Diversity", DT::dataTableOutput("shannon")
+                         tabPanel(title = "Shannon's Diversity", verbatimTextOutput("shannon")
                          ),
-                         tabPanel(title = "Simpson's Diversity", DT::dataTableOutput("simpson")
+                         tabPanel(title = "Simpson's Diversity", verbatimTextOutput("simpson")
                          ))
                 )),      
         
@@ -181,9 +204,8 @@ ui <- shinyUI(
                 ),
                 fluidRow(
                   tabBox(id="adonis", title = "ADONIS PERMANOVA", width = 12,
-                  tabPanel(title = "Between Groups", verbatimTextOutput("permanovabetween")),
-                  tabPanel(title = "Within Groups", verbatimTextOutput("permanovawithin")),
-                  tabPanel(title = "Without Groups", verbatimTextOutput("permanovawithout"))
+                  tabPanel(title = "With Group Stratification", verbatimTextOutput("permanovastrat")),
+                  tabPanel(title = "No Stratification", verbatimTextOutput("permanovanostrat"))
                 )
                 )
         ),
@@ -333,70 +355,79 @@ server <- function(input, output, session){
   
   ####Species Accumulation Curve####
   
-  output$shannon <- renderUI({
+  output$shannon <- renderPrint({
     Species_Matrix <- Species_Matrix()
     as.data.frame(diversity(Species_Matrix, index = "shannon"))
   })
   
-  output$simpson <- renderUI({
+  output$simpson <- renderPrint({
     Species_Matrix <- Species_Matrix()
     as.data.frame(diversity(Species_Matrix, index = "simpson"))
   })
   
-  output$permanovabetween <- renderPrint({
+  output$permanovastrat <- renderPrint({
     Species_Matrix <- Species_Matrix()
     Environmental_Matrix <- Environmental_Matrix()
     FlexBeta <- FlexBeta()
+    if (input$nonstandardised){
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+    } else {
+      bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
+    }
     demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
     demoflex.hcl <- as.hclust(demoflex)
     spe.bray.ward <- demoflex.hcl
     spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-    adonis(Species_Matrix ~ Environmental_Matrix[[input$var1]]*Environmental_Matrix[[input$var2]], strata=spe.bw.groups, permutations=999)
+    adonis(Species_Matrix ~ Environmental_Matrix[[input$var1]]*Environmental_Matrix[[input$var2]]*spe.bw.groups, strata=spe.bw.groups, permutations=999)
   })
   
-  output$permanovawithin <- renderPrint({
+  output$permanovanostrat <- renderPrint({
     Species_Matrix <- Species_Matrix()
     Environmental_Matrix <- Environmental_Matrix()
     FlexBeta <- FlexBeta()
+    if (input$nonstandardised){
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
+    } else {
+      bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
+    }
     demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
     demoflex.hcl <- as.hclust(demoflex)
     spe.bray.ward <- demoflex.hcl
     spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-    adonis(Species_Matrix ~ Environmental_Matrix[[input$var1]]*Environmental_Matrix[[input$var2]], permutations=999)
-  })
-  
-  output$permanovawithout <- renderPrint({
-    Species_Matrix <- Species_Matrix()
-    Environmental_Matrix <- Environmental_Matrix()
-    FlexBeta <- FlexBeta()
-    demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
-    demoflex.hcl <- as.hclust(demoflex)
-    spe.bray.ward <- demoflex.hcl
-    spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-    adonis(Species_Matrix ~ spe.bw.groups, permutations=999)
+    adonis(Species_Matrix ~ Environmental_Matrix[[input$var1]]*Environmental_Matrix[[input$var2]]*spe.bw.groups, permutations=999)
   })
   
   output$anosimplot <- renderPlot({
     Species_Matrix <- Species_Matrix()
     FlexBeta <- FlexBeta()
+    if (input$nonstandardised){
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
+    } else {
+      bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
+    }
     demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
     demoflex.hcl <- as.hclust(demoflex)
     spe.bray.ward <- demoflex.hcl
     spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
     grp.lev <- levels(factor(spe.bw.groups))
-    ano <- anosim(Species_Matrix, spe.bw.groups, distance = input$distance)
+    ano <- anosim(Species_Matrix, spe.bw.groups, distance = input$Distance)
     plot(ano, col=(1+c(1:length(grp.lev))), main= "ANOSIM", cex.axis=0.99)
   })
   
   output$anosimsum <- renderPrint({
     Species_Matrix <- Species_Matrix()
     FlexBeta <- FlexBeta()
+    if (input$nonstandardised){
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
+    } else {
+      bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
+    }
     demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
     demoflex.hcl <- as.hclust(demoflex)
     spe.bray.ward <- demoflex.hcl
     spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
     grp.lev <- levels(factor(spe.bw.groups))
-    ano <- anosim(Species_Matrix, spe.bw.groups, distance = input$distance)
+    ano <- anosim(Species_Matrix, spe.bw.groups, distance = input$Distance)
     summary(ano)
   })
   
@@ -412,7 +443,7 @@ server <- function(input, output, session){
       FlexBeta <- FlexBeta()
       Environmental_Matrix <- Environmental_Matrix()
       if (input$nonstandardised){
-        bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+        bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
       } else {
         bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
       }
@@ -438,7 +469,7 @@ server <- function(input, output, session){
       FlexBeta <- FlexBeta()
       Environmental_Matrix <- Environmental_Matrix()
       if (input$nonstandardised){
-        bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+        bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
       } else {
         bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
       }
@@ -464,7 +495,7 @@ server <- function(input, output, session){
       FlexBeta <- FlexBeta()
       Environmental_Matrix <- Environmental_Matrix()
       if (input$nonstandardised){
-        bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+        bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
       } else {
         bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
       }
@@ -497,7 +528,7 @@ server <- function(input, output, session){
       FlexBeta <- FlexBeta()
       Environmental_Matrix <- Environmental_Matrix()
       if (input$nonstandardised){
-        bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+        bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
       } else {
         bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
       }
@@ -546,7 +577,7 @@ server <- function(input, output, session){
     Environmental_Matrix <- Environmental_Matrix()
     FlexBeta <- FlexBeta()
     if (input$nonstandardised){
-      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
@@ -661,7 +692,7 @@ server <- function(input, output, session){
     Species_Matrix <- Species_Matrix()
     FlexBeta <- FlexBeta()
     if (input$nonstandardised){
-      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
@@ -685,7 +716,7 @@ server <- function(input, output, session){
     gof = goodness(bci.mds)
     plot(bci.mds, type="n", main="Site IDs and Associated Goodness of Fit") 
     if (input$nonstandardised){
-      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
@@ -706,7 +737,7 @@ server <- function(input, output, session){
     Species_Matrix <- Species_Matrix()
     FlexBeta <- FlexBeta()
     if (input$nonstandardised){
-      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
@@ -739,7 +770,7 @@ server <- function(input, output, session){
     Species_Matrix <- Species_Matrix()
     FlexBeta <- FlexBeta()
     if (input$nonstandardised){
-      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
@@ -761,7 +792,7 @@ server <- function(input, output, session){
     Species_Matrix <- Species_Matrix()
     FlexBeta <- FlexBeta()
     if (input$nonstandardised){
-      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
@@ -792,7 +823,7 @@ server <- function(input, output, session){
   output$mclust <- renderPlot({
     Species_Matrix <- Species_Matrix()
     if (input$nonstandardised){
-      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
@@ -811,7 +842,7 @@ server <- function(input, output, session){
     Species_Matrix <- Species_Matrix()
     FlexBeta <- FlexBeta()
     if (input$nonstandardised){
-      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
