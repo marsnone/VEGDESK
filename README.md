@@ -13,7 +13,7 @@ Running VEGDESK from R
 From any R console with internet access run the following commands to launch your app:
 
 ``` r
-library(ghit) # or library(devtools)
+library(devtools)
 runGitHub("VEGDESK", "marsnone")
 ```
 
