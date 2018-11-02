@@ -19,8 +19,8 @@ library(shinycssloaders)
 library(shinythemes)
 library(shinydashboard)
 library(shinydashboardPlus)
-library(logging)
 library(shinyjs)
+library(markdown)
 
 ####Global####
 
@@ -33,7 +33,15 @@ ui <- shinyUI(
   dashboardPagePlus(
     #useShinyjs(),
     
-    header = dashboardHeaderPlus(title = span(tagList(icon("grain" , lib = "glyphicon"), "VEGDESK")), enable_rightsidebar = TRUE, rightSidebarIcon = "gears"),
+    header = dashboardHeaderPlus(title = span(tagList(icon("grain" , lib = "glyphicon"), "VEGDESK")), enable_rightsidebar = TRUE, rightSidebarIcon = "gears", 
+      dropdownMenu(
+      type = "tasks", 
+      badgeStatus = "danger",
+      taskItem(value = 0, color = "aqua", "Upload A Species Matrix"),
+      taskItem(value = 0, color = "green", "Upload An Environmental Matrix"),
+      taskItem(value = 0, color = "yellow", "Select Environmental Variables"),
+      taskItem(value = 0, color = "red", "Change parameters by clicking the gears icon")
+    )),
     
     ####LeftSideBar####
     
@@ -53,35 +61,25 @@ ui <- shinyUI(
           menuItem("Environmental", tabName = "env", icon = icon("leaf")),
           menuItem("Info", tabName = "Info", icon = icon("info-circle"),
                    menuSubItem("VEGDESK Guide", tabName = "guide", icon = icon("book")),
-                   menuSubItem("Supplementary Information", tabName = "supp", icon = icon("university")),
+                   menuSubItem("Supplementary Information", tabName = "info", icon = icon("university")),
                    menuSubItem("Contact & Support", tabName = "contact", icon = icon("thumbs-up"))),
           hr(),
           div(class='info',
               p('Developed by',a("Martin O'Neill",href='https://twitter.com/Martin_O_Neill')),
-               a(icon('twitter fa-2x'),href='https://twitter.com/Martin_O_Neill'),
+              #a(icon('twitter fa-2x'),href='https://twitter.com/Martin_O_Neill'),
               p(
                 HTML("<div style='float:center'>
-                  <a href='https://twitter.com/share' 
-                                           class='twitter-share-button' 
+                  <a class='twitter-share-button' 
+                                           href='https://twitter.com/intent/tweet?text=#rstats #shiny for Vegetation Community Analysis created by @Martin_O_Neill: https://martinoneill.shinyapps.io/htmlvegdesk/'
                                            align='middle' 
-                                           data-url='www.davesteps.com/homebrewR/' 
-                                           data-text='created by @Martin_O_Neill using #rstats and #shiny: davesteps.com/homebrewR/' 
-                                           data-size='large'>Tweet
-                                           </a>
-                                           <script>!function(d,s,id){
-                                           var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';
-                                           if(!d.getElementById(id)){
-                                           js=d.createElement(s);
-                                           js.id=id;
-                                           js.src=p+'://platform.twitter.com/widgets.js';
-                                           fjs.parentNode.insertBefore(js,fjs);
-                                           }
-                                           }(document, 'script', 'twitter-wjs');
-                                           </script>
+                                           data-url='https://martinoneill.shinyapps.io/htmlvegdesk/' 
+                                           
+                                           data-size='large'>
+                                           Tweet</a>
                                            </div>")),
               p(a(icon('github fa-2x'),href='https://github.com/marsnone/vegdesk',target='_blank'))
-        )
-      )),
+          )
+        )),
     
     ####RightSideBar####
     
@@ -186,15 +184,49 @@ ui <- shinyUI(
                          ))
                 )),      
         
-        #tabItem(tabName = "Info"
-        #),      
+        tabItem(tabName = "contact",
+                fluidRow(
+                  box(
+                    title = "Get in touch on GitHub",
+                    status = NULL,
+                    socialButton(
+                      url = "https://github.com/marsnone/VEGDESK",
+                      type = "github"
+                    )
+                  ), 
+                    box(
+                      title = "Get in touch on Twitter",
+                      status = NULL,
+                      socialButton(
+                        url = "https://twitter.com/Martin_O_Neill",
+                        type = "twitter"
+                    
+                    )
+                    )
+                  ),
+                    fluidRow(
+                      box(
+                        title = "Get in touch on LinkedIn",
+                        status = NULL,
+                        socialButton(
+                          url = "https://www.linkedin.com/in/martin-o-neill-ie/",
+                          type = "linkedin"
+                        )
+                      )
+                    )
+                ),   
+        
+        tabItem(tabName = "info",
+                fluidRow(
+                  box(title = "Citations", width = 12, status = "success", collapsible = T, textOutput("cite"))
+                )),   
         
         tabItem(tabName = "env",
                 fluidRow(
-                  box(title = paste("Group Boxplot - Variable 1"), width = 12, status = "success", collapsible = T, plotOutput("envboxplot1"))
+                  box(title = "Group Boxplot - Variable 1", width = 12, status = "success", collapsible = T, plotOutput("envboxplot1"))
                 ),
                 fluidRow(
-                  box(title = paste("Group Boxplot - Variable 2"), width = 12, status = "warning", collapsible = T, plotOutput("envboxplot2"))
+                  box(title = "Group Boxplot - Variable 2", width = 12, status = "warning", collapsible = T, plotOutput("envboxplot2"))
                 ),
                 fluidRow(
                   box(title = "ANOSIM Plot", width = 6, status = "info", collapsible = T, plotOutput("anosimplot"))
@@ -204,9 +236,9 @@ ui <- shinyUI(
                 ),
                 fluidRow(
                   tabBox(id="adonis", title = "ADONIS PERMANOVA", width = 12,
-                  tabPanel(title = "With Group Stratification", verbatimTextOutput("permanovastrat")),
-                  tabPanel(title = "No Stratification", verbatimTextOutput("permanovanostrat"))
-                )
+                         tabPanel(title = "With Group Stratification", verbatimTextOutput("permanovastrat")),
+                         tabPanel(title = "No Stratification", verbatimTextOutput("permanovanostrat"))
+                  )
                 )
         ),
         
@@ -218,7 +250,7 @@ ui <- shinyUI(
                   box(title = "NM3DS", width = 12, status = "warning", collapsible = T,  plotOutput("ThreeDim"))
                 ),
                 fluidRow(
-                  box(title = "Interactive 3D-NMDS", width = 12, status = "primary", collapsible = T, collapsed = T, plotOutput("ThreeDNMS"))
+                  box(title = "Interactive 3D-NMDS (Requires XQuartz X11)", width = 12, status = "primary", collapsible = T, collapsed = T, plotOutput("ThreeDNMS"))
                 )
         ),       
         
@@ -834,6 +866,11 @@ server <- function(input, output, session){
     plot(d_clust, main= "Model-Based Optimal Cluster Number Assessment", what="BIC")
     title(main = paste("Model-Based Optimal Cluster Number Assessment:\n Generalised Suggestion =", m.best,"Groups" ))
     
+  })
+  
+  output$cite <- renderPrint({
+    packages <- c("shiny","vegan","labdsv","MASS","ggplot2","ggbiplot","graphics","readr","cluster","dendextend","DT","dygraphs","mclust","pca3d","vegan3d","Cairo","grDevices","shinycssloaders","shinythemes","shinydashboard","shinydashboardPlus","shinyjs","markdown")
+    lapply(packages, citation)
   })
   
   ####Silhouette Plot####
