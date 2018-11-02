@@ -24,16 +24,16 @@ You can email me at oneilm14@tcd.ie - I'd love to hear your suggestions and feed
 
 If you'd like to request a specific feature please include the following in your message:
 
-**Is your feature request related to a problem? Please describe.**
+**Is your feature request related to a problem? Please describe:**
 A clear and concise description of what the problem is, if any (e.g. I'm always frustrated when [...])
 
-**Describe the solution you want**
+**Describe the solution you want:**
 What you'd like to see happen.
 
-**Describe alternatives you've considered**
+**Describe alternatives you've considered:**
 A clear and concise description of any alternative solutions or features you've considered.
 
-**Additional context**
+**Additional context:**
 Add any other context or screenshots about the feature request here.
 
 
@@ -45,7 +45,7 @@ Send an email to oneilm14@tcd.ie, detailing the following:
 **A description of the bug:**
 A clear and concise description of what the bug is.
 
-**How To Reproduce the Bug:**
+**How to reproduce the bug:**
 Steps to reproduce the behavior:
 1. Go to '...'
 2. Click on '....'
@@ -55,18 +55,20 @@ Steps to reproduce the behavior:
 **Expected behavior:**
 A concise description of what you expected to happen.
 
-**Screenshots**
+**Screenshots:**
 If applicable, add screenshots to help explain your problem.
 
 **Your system info (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+ - OS: [e.g. macOS, Windows 10, Linux]
+ - Browser [e.g. chrome, safari, firefox]
+ - Version [e.g. 22.66]
 
-**Additional context**
+**Additional context:**
 Add any other context about the problem here.
 
 ## Support on Beerpay
+Thanks for checking this out!
+
 Want to say cheers? :beers:!
 
 [![Beerpay](https://beerpay.io/marsnone/VEGDESK/badge.svg?style=beer-square)](https://beerpay.io/marsnone/VEGDESK)  [![Beerpay](https://beerpay.io/marsnone/VEGDESK/make-wish.svg?style=flat-square)](https://beerpay.io/marsnone/VEGDESK?focus=wish)
