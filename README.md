@@ -17,7 +17,7 @@ library(ghit) # or library(devtools)
 runGitHub("VEGDESK", "marsnone")
 ```
 
-Make a Suggestion or Request a Feature
+Make a Suggestion // Request a Feature
 ------------
 
 You can email me at oneilm14@tcd.ie - I'd love to hear your suggestions and feedback!
