@@ -20,7 +20,7 @@ runGitHub("VEGDESK", "marsnone")
 Make a Suggestion // Request a Feature
 ------------
 
-You can email me at oneilm14@tcd.ie - I'd love to hear your suggestions and feedback!
+You can email me at oneilm14@tcd.ie or go to the Issues (click the 'Issues' tab above or on the following link https://github.com/marsnone/VEGDESK/issues/new) - I'd love to hear your suggestions and feedback!
 
 If you'd like to request a specific feature please include the following in your message:
 
@@ -40,7 +40,7 @@ Add any other context or screenshots about the feature request here.
 Report a Bug
 ------------
 
-Send an email to oneilm14@tcd.ie, detailing the following:
+Send an email to oneilm14@tcd.ie or click the 'Issues' tab above or on the following link https://github.com/marsnone/VEGDESK/issues/new, detailing the following:
 
 **A description of the bug:**
 A clear and concise description of what the bug is.
