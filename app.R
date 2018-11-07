@@ -20,13 +20,14 @@ library(shinythemes)
 library(shinydashboard)
 library(shinydashboardPlus)
 library(shinyjs)
-library(markdown)
+library(rgl)
+
+
 
 ####Global####
 
 distance <- c("manhattan", "euclidean", "canberra", "bray", "kulczynski", "jaccard", "gower", "morisita", "horn", "mountford", "raup" , "binomial", "chao")
 stand <- c("pa", "total", "max", "freq", "hellinger", "log", "chi", "range", "normalize", "standardize")
-
 ####UI Start####
 
 ui <- shinyUI(
@@ -34,14 +35,15 @@ ui <- shinyUI(
     #useShinyjs(),
     
     header = dashboardHeaderPlus(title = span(tagList(icon("grain" , lib = "glyphicon"), "VEGDESK")), enable_rightsidebar = TRUE, rightSidebarIcon = "gears", 
-      dropdownMenu(
-      type = "tasks", 
-      badgeStatus = "danger",
-      taskItem(value = 0, color = "aqua", "Upload A Species Matrix"),
-      taskItem(value = 0, color = "green", "Upload An Environmental Matrix"),
-      taskItem(value = 0, color = "yellow", "Select Environmental Variables"),
-      taskItem(value = 0, color = "red", "Change parameters by clicking the gears icon")
-    )),
+                                 dropdownMenu(
+                                   type = "tasks", 
+                                   badgeStatus = "danger",
+                                   taskItem(value = 0, color = "aqua", "Upload A Species Matrix"),
+                                   taskItem(value = 0, color = "green", "Upload An Environmental Matrix"),
+                                   taskItem(value = 0, color = "yellow", "Select Environmental Variables"),
+                                   taskItem(value = 0, color = "red", "Change parameters by clicking the gears icon")
+                                 )
+    ),
     
     ####LeftSideBar####
     
@@ -63,23 +65,14 @@ ui <- shinyUI(
                    menuSubItem("VEGDESK Guide", tabName = "guide", icon = icon("book")),
                    menuSubItem("Supplementary Information", tabName = "info", icon = icon("university")),
                    menuSubItem("Contact & Support", tabName = "contact", icon = icon("thumbs-up"))),
-          hr(),
-          div(class='info',
-              p('Developed by',a("Martin O'Neill",href='https://twitter.com/Martin_O_Neill')),
-              #a(icon('twitter fa-2x'),href='https://twitter.com/Martin_O_Neill'),
-              p(
-                HTML("<div style='float:center'>
-                  <a class='twitter-share-button' 
-                                           href='https://twitter.com/intent/tweet?text=#rstats #shiny for Vegetation Community Analysis created by @Martin_O_Neill: https://martinoneill.shinyapps.io/htmlvegdesk/'
-                                           align='middle' 
-                                           data-url='https://martinoneill.shinyapps.io/htmlvegdesk/' 
-                                           
-                                           data-size='large'>
-                                           Tweet</a>
-                                           </div>")),
+          tags$hr(),
+          div(class='info', align ="center",
+              #p('Developed by',a("Martin O'Neill",href='https://twitter.com/Martin_O_Neill/status/1060165683630223360')),
+              a(icon('twitter fa-2x'),href="https://twitter.com/Martin_O_Neill/status/1060165683630223360"),
               p(a(icon('github fa-2x'),href='https://github.com/marsnone/vegdesk',target='_blank'))
           )
-        )),
+        )
+      ),
     
     ####RightSideBar####
     
@@ -187,34 +180,34 @@ ui <- shinyUI(
         tabItem(tabName = "contact",
                 fluidRow(
                   box(
-                    title = "Get in touch on GitHub",
+                    title = "Report a Bug or Suggest a Feature via GitHub",
                     status = NULL,
                     socialButton(
                       url = "https://github.com/marsnone/VEGDESK",
                       type = "github"
                     )
                   ), 
-                    box(
-                      title = "Get in touch on Twitter",
-                      status = NULL,
-                      socialButton(
-                        url = "https://twitter.com/Martin_O_Neill",
-                        type = "twitter"
-                    
+                  box(
+                    title = "Get in touch on Twitter",
+                    status = NULL,
+                    socialButton(
+                      url = "https://twitter.com/Martin_O_Neill",
+                      type = "twitter"
+                      
                     )
+                  )
+                ),
+                fluidRow(
+                  box(
+                    title = "Get in touch on LinkedIn",
+                    status = NULL,
+                    socialButton(
+                      url = "https://www.linkedin.com/in/martin-o-neill-ie/",
+                      type = "linkedin"
                     )
-                  ),
-                    fluidRow(
-                      box(
-                        title = "Get in touch on LinkedIn",
-                        status = NULL,
-                        socialButton(
-                          url = "https://www.linkedin.com/in/martin-o-neill-ie/",
-                          type = "linkedin"
-                        )
-                      )
-                    )
-                ),   
+                  )
+                )
+        ),   
         
         tabItem(tabName = "info",
                 fluidRow(
@@ -354,7 +347,7 @@ server <- function(input, output, session){
   })
   
   Environmental_Matrix <- reactive({
-    shiny::validate(need(input$file2, "Upload an Environmnetal Matrix!"))
+    shiny::validate(need(input$file2, "Upload an Environmental Matrix!"))
     infile <- input$file2
     if (is.null(infile))
       # User has not uploaded a file yet. Use NULL to prevent observeEvent from triggering
