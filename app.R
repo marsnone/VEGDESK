@@ -21,6 +21,9 @@ library(shinydashboard)
 library(shinydashboardPlus)
 library(shinyjs)
 library(rgl)
+library(rpart)
+library(partykit)
+library(shinysky)
 
 
 
@@ -65,11 +68,17 @@ ui <- shinyUI(
                    menuSubItem("VEGDESK Guide", tabName = "guide", icon = icon("book")),
                    menuSubItem("Supplementary Information", tabName = "info", icon = icon("university")),
                    menuSubItem("Contact & Support", tabName = "contact", icon = icon("thumbs-up"))),
-          tags$hr(),
+          hr(),
           div(class='info', align ="center",
               #p('Developed by',a("Martin O'Neill",href='https://twitter.com/Martin_O_Neill/status/1060165683630223360')),
-              a(icon('twitter fa-2x'),href="https://twitter.com/Martin_O_Neill/status/1060165683630223360"),
-              p(a(icon('github fa-2x'),href='https://github.com/marsnone/vegdesk',target='_blank'))
+              menuItem("Share on Twitter", icon = icon('twitter fa-2x'), 
+                       href = "https://twitter.com/Martin_O_Neill/status/1060165683630223360"),
+              menuItem("Source code and More on GitHub", icon = icon("github fa-2x"), 
+                       href = "https://github.com/marsnone/vegdesk"),
+              hr(),
+              HTML("<a href='https://ko-fi.com/Y8Y1LROG' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://az743702.vo.msecnd.net/cdn/kofi2.png?v=0' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>"),
+              hr(),
+              HTML('<a href="https://beerpay.io/marsnone/VEGDESK"><img src="https://beerpay.io/marsnone/VEGDESK/badge.svg?style=plastic" /></a>')
           )
         )
       ),
@@ -232,7 +241,19 @@ ui <- shinyUI(
                          tabPanel(title = "With Group Stratification", verbatimTextOutput("permanovastrat")),
                          tabPanel(title = "No Stratification", verbatimTextOutput("permanovanostrat"))
                   )
-                )
+                ),
+                fluidRow(
+                  box(title = "Environmental Classification/Decision Tree", width = 12, status = "danger", collapsible = T, plotOutput("partree")
+                  )
+                ),
+                fluidRow(box(title = "Partitioning Parameters",
+                             sliderInput("minsplit", "Min. split:",
+                                         min = 1, max = 100, value = 6, step= 1),
+                             sliderInput("pvalue", "Significance:",
+                                         min = 0.001, max = 0.05, value = 0.05, step= 0.001),
+                             selectInput("partype", "Partitioning Method:", list("anova","class"))
+                             
+                ))
         ),
         
         tabItem(tabName = "3D",
@@ -327,8 +348,6 @@ ui <- shinyUI(
 server <- function(input, output, session){
   
   options(shiny.usecairo=T)
-  #options(shiny.reactlog=TRUE)
-  #options(shiny.error=browser)
   
   ####Sample Data Upload####
   output$downloadData <- downloadHandler(
@@ -378,6 +397,24 @@ server <- function(input, output, session){
     )
   })
   
+  output$partree <- renderPlot({
+    Species_Matrix <- Species_Matrix()
+    Environmental_Matrix <- Environmental_Matrix()
+    FlexBeta <- FlexBeta()
+    if (input$nonstandardised){
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+    } else {
+      bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
+    }
+    demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
+    demoflex.hcl <- as.hclust(demoflex)
+    spe.bray.ward <- demoflex.hcl
+    spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
+    grp.lev <- levels(factor(spe.bw.groups))
+    tree1 = rpart(factor(spe.bw.groups) ~ ., data= Environmental_Matrix[,-1], method= input$partype, control=rpart.control(minsplit=input$minsplit, cp=input$pvalue))
+    tree1_p = as.party(tree1)
+    plot(tree1_p, col= (1+c(1:length(grp.lev))))
+  })
   ####Species Accumulation Curve####
   
   output$shannon <- renderPrint({
