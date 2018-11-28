@@ -3,7 +3,11 @@
 R Shiny App for Vegetation Description and Analysis
 ===============================
 
-`VEGDESK`
+`VEGDESK` is an R Shiny app for Vegetation Analysis & Description/Numerical Ecology
+
+Running VEGDESK from the ShinyApps online server
+------------
+Click the link below, or copy and paste it into your browser:
 
 https://martinoneill.shinyapps.io/htmlvegdesk/
 
