@@ -9,7 +9,7 @@ Running VEGDESK from the ShinyApps online server
 ------------
 Click the link below, or copy and paste it into your browser:
 
-https://martinoneill.shinyapps.io/htmlvegdesk/
+https://martinoneill.shinyapps.io/vegdesk/
 
 Running VEGDESK from R
 ------------
