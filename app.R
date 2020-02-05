@@ -3,7 +3,7 @@ library(vegan)
 library(labdsv)
 library(MASS)
 library(ggplot2)
-library(ggbiplot)
+#library(ggbiplot)
 library(graphics)
 library(readr)
 library(cluster)
@@ -23,7 +23,7 @@ library(shinyjs)
 library(rgl)
 library(rpart)
 library(partykit)
-library(shinysky)
+#library(shinysky)
 
 
 
@@ -360,7 +360,7 @@ server <- function(input, output, session){
     contentType = "application/zip")
   
   Species_Matrix <- reactive({
-    shiny::validate(need(input$file1, "Upload an Species Matrix!"))
+    shiny::validate(need(input$file1, "Upload a Species Matrix!"))
     req(input$file1)
     read.csv(input$file1$datapath)
   })
@@ -808,11 +808,11 @@ server <- function(input, output, session){
     spe.bray.ward <- demoflex.hcl
     spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
     grp.lev <- levels(factor(spe.bw.groups))
-    spe.sc <- wascores(Booterstown_Vegan_Transect_Matrix, bc)
+    spe.sc <- wascores(Species_Matrix, bc)
     cl <- cutree(demoflex.hcl, k=input$group)
-    const(Booterstown_Vegan_Transect_Matrix, cl)
-    importance(Booterstown_Vegan_Transect_Matrix, cl)
-    mod <- indval(Booterstown_Vegan_Transect_Matrix, as.numeric(cl))
+    const(Species_Matrix, cl)
+    importance(Species_Matrix, cl)
+    mod <- indval(Species_Matrix, as.numeric(cl))
     #names(mod)
     #mod$maxcls
     #mod$pval
@@ -923,7 +923,7 @@ server <- function(input, output, session){
     spe.bray.ward <- demoflex.hcl
     spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
     grp.lev <- levels(factor(spe.bw.groups))
-    spe.sc <- wascores(Booterstown_Vegan_Transect_Matrix, bc)
+    spe.sc <- wascores(Species_Matrix, bc)
     cl <- cutree(demoflex.hcl, k=input$group)
     si <- silhouette (cl, bc)
     silo<-sortSilhouette(si)
