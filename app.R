@@ -1,4 +1,5 @@
 library(shiny)
+library(tidyverse)
 library(vegan)
 library(labdsv)
 library(MASS)
@@ -23,6 +24,8 @@ library(shinyjs)
 library(rgl)
 library(rpart)
 library(partykit)
+library(purrr)
+library(tidyselect)
 #library(shinysky)
 
 
@@ -242,18 +245,17 @@ ui <- shinyUI(
                          tabPanel(title = "No Stratification", verbatimTextOutput("permanovanostrat"))
                   )
                 ),
-                fluidRow(
-                  box(title = "Environmental Classification/Decision Tree", width = 12, status = "danger", collapsible = T, plotOutput("partree")
-                  )
-                ),
-                fluidRow(box(title = "Partitioning Parameters",
-                             sliderInput("minsplit", "Min. split:",
+                fluidRow(box(title = "Partitioning Parameters for Custom Environmental Classification/Decision Tree",
+                             sliderInput("minsplit", "Min. split (Try set minsplit >/= Number of clusters to account for all clusters):",
                                          min = 1, max = 100, value = 6, step= 1),
-                             sliderInput("pvalue", "Significance:",
-                                         min = 0.001, max = 0.05, value = 0.05, step= 0.001),
-                             selectInput("partype", "Partitioning Method:", list("anova","class"))
-                             
-                ))
+                             ## or automatically select minsplit
+                             sliderInput("cpvalue", "Complexity Parameter:", min = 0.001, max = 0.05, value = 0.05, step= 0.001),
+                             #sliderInput("crossval", "Number of Cross-validations:", min = 0, max = 100, value = 5, step= 1),
+                             selectInput("partype", "Partitioning Method:", list("anova","class")), width = 12)),
+                fluidRow(
+                  box(title = "Environmental Classification/Decision Tree (Custom Parameters)", width = 12, status = "danger", collapsible = T, plotOutput("partree"))),
+                fluidRow(
+                  box(title = "Environmental Classification/Decision Tree (GridSearch Seleceted Parameters)", width = 12, status = "danger", collapsible = T, plotOutput("gridsearch.partree")))
         ),
         
         tabItem(tabName = "3D",
@@ -380,6 +382,8 @@ server <- function(input, output, session){
   
   ####Data Tables####
   
+
+  
   output$table <- renderDT(Species_Matrix())
   output$table2 <- renderDT(Environmental_Matrix())
   
@@ -397,23 +401,78 @@ server <- function(input, output, session){
     )
   })
   
+  output$checkbox2 <- renderUI({
+    selectInput(inputId = "var3", 
+                label = "Select Environmental Variable 3", 
+                choices = colnames(Environmental_Matrix())
+    )
+  })
+  
   output$partree <- renderPlot({
     Species_Matrix <- Species_Matrix()
     Environmental_Matrix <- Environmental_Matrix()
     FlexBeta <- FlexBeta()
     if (input$nonstandardised){
-      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
-    demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
-    demoflex.hcl <- as.hclust(demoflex)
-    spe.bray.ward <- demoflex.hcl
-    spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-    grp.lev <- levels(factor(spe.bw.groups))
-    tree1 = rpart(factor(spe.bw.groups) ~ ., data= Environmental_Matrix[,-1], method= input$partype, control=rpart.control(minsplit=input$minsplit, cp=input$pvalue))
+    chopedtree <- agnes(bc,method='flexible',par.method= FlexBeta)
+    chopedtree.hcl <- as.hclust(chopedtree)
+    cutclusters <- cutree(chopedtree.hcl, k=input$group)
+    grp.lev <- levels(factor(cutclusters))
+    tree1 = rpart(factor(cutclusters) ~ ., data= Environmental_Matrix[,-1], method= input$partype, control=rpart.control(minsplit=input$minsplit, 
+                                                                                                                         cp=input$cpvalue, 
+                                                                                                                         #xval = input$crossval
+                                                                                                                         ))
     tree1_p = as.party(tree1)
     plot(tree1_p, col= (1+c(1:length(grp.lev))))
+  })
+  
+  output$gridsearch.partree <- renderPlot({
+    Species_Matrix <- Species_Matrix()
+    Environmental_Matrix <- Environmental_Matrix()
+    Environmental_Matrix <- Environmental_Matrix[,-1]
+    FlexBeta <- FlexBeta()
+    if (input$nonstandardised){
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
+    } else {
+      bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
+    }
+    chopedtree <- agnes(bc,method='flexible',par.method= FlexBeta)
+    chopedtree.hcl <- as.hclust(chopedtree)
+    cutclusters <- cutree(chopedtree.hcl, k=input$group)
+    comgroupclust <- as.factor(cutclusters)
+    grp.lev <- levels(factor(cutclusters))
+    set.seed(7)
+    Environmental_Matrix <- cbind(comgroupclust, Environmental_Matrix)
+    nrows <- nrow(Environmental_Matrix)
+    train_rows <- sample(seq(nrows), size = .75 * nrows)
+    train <- Environmental_Matrix[ train_rows, ]
+    test  <- Environmental_Matrix[-train_rows, ]
+    # Define a named list of parameter values
+    gs <- list(minsplit = seq(1, 30, 1),
+               maxdepth = seq(1, 30, 1)) %>% 
+      cross_df() # Convert to data frame grid
+    
+    mod <- function(...){
+      rpart(comgroupclust ~ ., data= train, model = T, control=rpart.control(...))
+    }
+    gs <- gs %>% mutate(fit = pmap(gs, mod))
+    
+    compute_accuracy <- function(fit, test_features, test_labels) {
+      predicted <- predict(fit, test_features, type = "class")
+      mean(predicted == test_labels)
+    }
+    
+    test_features <- test[,-1]
+    test_labels   <- test$comgroupclust
+    gs <- gs %>% mutate(test_accuracy = map_dbl(fit, compute_accuracy, test_features, test_labels))
+    gs <- gs %>% arrange(desc(test_accuracy), desc(minsplit), maxdepth)
+    prp(gs$fit[[1]])
+    
+    #plot(gs$minsplit, gs$test_accuracy, type = "b")
+    
   })
   ####Species Accumulation Curve####
   
@@ -432,15 +491,14 @@ server <- function(input, output, session){
     Environmental_Matrix <- Environmental_Matrix()
     FlexBeta <- FlexBeta()
     if (input$nonstandardised){
-      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisa, na.rm= F), method=input$Distance, binary=F)
+      bc <-vegdist(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), method=input$Distance, binary=F)
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
-    demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
-    demoflex.hcl <- as.hclust(demoflex)
-    spe.bray.ward <- demoflex.hcl
-    spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-    adonis(Species_Matrix ~ Environmental_Matrix[[input$var1]]*Environmental_Matrix[[input$var2]]*spe.bw.groups, strata=spe.bw.groups, permutations=999)
+    chopedtree <- agnes(bc,method='flexible',par.method= FlexBeta)
+    chopedtree.hcl <- as.hclust(chopedtree)
+    cutclusters <- cutree(chopedtree.hcl, k=input$group)
+    adonis(Species_Matrix ~ Environmental_Matrix[[input$var1]]*Environmental_Matrix[[input$var2]]*cutclusters, strata=cutclusters, permutations=999)
   })
   
   output$permanovanostrat <- renderPrint({
@@ -452,11 +510,10 @@ server <- function(input, output, session){
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
-    demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
-    demoflex.hcl <- as.hclust(demoflex)
-    spe.bray.ward <- demoflex.hcl
-    spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-    adonis(Species_Matrix ~ Environmental_Matrix[[input$var1]]*Environmental_Matrix[[input$var2]]*spe.bw.groups, permutations=999)
+    chopedtree <- agnes(bc,method='flexible',par.method= FlexBeta)
+    chopedtree.hcl <- as.hclust(chopedtree)
+    cutclusters <- cutree(chopedtree.hcl, k=input$group)
+    adonis(Species_Matrix ~ Environmental_Matrix[[input$var1]]*Environmental_Matrix[[input$var2]]*cutclusters, permutations=999)
   })
   
   output$anosimplot <- renderPlot({
@@ -467,12 +524,11 @@ server <- function(input, output, session){
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
-    demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
-    demoflex.hcl <- as.hclust(demoflex)
-    spe.bray.ward <- demoflex.hcl
-    spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-    grp.lev <- levels(factor(spe.bw.groups))
-    ano <- anosim(Species_Matrix, spe.bw.groups, distance = input$Distance)
+    chopedtree <- agnes(bc,method='flexible',par.method= FlexBeta)
+    chopedtree.hcl <- as.hclust(chopedtree)
+    cutclusters <- cutree(chopedtree.hcl, k=input$group)
+    grp.lev <- levels(factor(cutclusters))
+    ano <- anosim(Species_Matrix, cutclusters, distance = input$Distance)
     plot(ano, col=(1+c(1:length(grp.lev))), main= "ANOSIM", cex.axis=0.99)
   })
   
@@ -484,12 +540,11 @@ server <- function(input, output, session){
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
-    demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
-    demoflex.hcl <- as.hclust(demoflex)
-    spe.bray.ward <- demoflex.hcl
-    spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-    grp.lev <- levels(factor(spe.bw.groups))
-    ano <- anosim(Species_Matrix, spe.bw.groups, distance = input$Distance)
+    chopedtree <- agnes(bc,method='flexible',par.method= FlexBeta)
+    chopedtree.hcl <- as.hclust(chopedtree)
+    cutclusters <- cutree(chopedtree.hcl, k=input$group)
+    grp.lev <- levels(factor(cutclusters))
+    ano <- anosim(Species_Matrix, cutclusters, distance = input$Distance)
     summary(ano)
   })
   
@@ -509,18 +564,17 @@ server <- function(input, output, session){
       } else {
         bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
       }
-      demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
-      demoflex.hcl <- as.hclust(demoflex)
+      chopedtree <- agnes(bc,method='flexible',par.method= FlexBeta)
+      chopedtree.hcl <- as.hclust(chopedtree)
       if (input$nonstandardised){
         bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
       } else {
         bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
       }
-      spe.bray.ward <- demoflex.hcl
-      spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-      grp.lev <- levels(factor(spe.bw.groups))
+      cutclusters <- cutree(chopedtree.hcl, k=input$group)
+      grp.lev <- levels(factor(cutclusters))
       sit.sc <- scores(bci.mds)
-      p1 <- ggplot(aes(y = Environmental_Matrix[[input$var1]], x = factor(spe.bw.groups)), data = Environmental_Matrix, fill= factor(spe.bw.groups)) + geom_boxplot(col=1+c(1:length(grp.lev))) + stat_summary(fun.y = mean, geom="point",colour="black", size=2)
+      p1 <- ggplot(aes(y = Environmental_Matrix[[input$var1]], x = factor(cutclusters)), data = Environmental_Matrix, fill= factor(cutclusters)) + geom_boxplot(col=1+c(1:length(grp.lev))) + stat_summary(fun.y = mean, geom="point",colour="black", size=2)
       p1 + ggtitle(paste0(input$var1), "by Group") + xlab("Group") + ylab(paste0(input$var1))
       p1
     })
@@ -535,18 +589,17 @@ server <- function(input, output, session){
       } else {
         bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
       }
-      demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
-      demoflex.hcl <- as.hclust(demoflex)
+      chopedtree <- agnes(bc,method='flexible',par.method= FlexBeta)
+      chopedtree.hcl <- as.hclust(chopedtree)
       if (input$nonstandardised){
         bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
       } else {
         bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
       }
-      spe.bray.ward <- demoflex.hcl
-      spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-      grp.lev <- levels(factor(spe.bw.groups))
+      cutclusters <- cutree(chopedtree.hcl, k=input$group)
+      grp.lev <- levels(factor(cutclusters))
       sit.sc <- scores(bci.mds)
-      p2 <- ggplot(aes(y = Environmental_Matrix[[input$var2]], x = factor(spe.bw.groups)), data = Environmental_Matrix, fill= factor(spe.bw.groups)) + geom_boxplot(col=1+c(1:length(grp.lev))) + stat_summary(fun.y = mean, geom="point",colour="black", size=2)
+      p2 <- ggplot(aes(y = Environmental_Matrix[[input$var2]], x = factor(cutclusters)), data = Environmental_Matrix, fill= factor(cutclusters)) + geom_boxplot(col=1+c(1:length(grp.lev))) + stat_summary(fun.y = mean, geom="point",colour="black", size=2)
       p2 + ggtitle(paste0(input$var2), "by Group") + xlab("Group") + ylab(paste0(input$var2))
       p2
     })
@@ -561,23 +614,22 @@ server <- function(input, output, session){
       } else {
         bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
       }
-      demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
-      demoflex.hcl <- as.hclust(demoflex)
+      chopedtree <- agnes(bc,method='flexible',par.method= FlexBeta)
+      chopedtree.hcl <- as.hclust(chopedtree)
       if (input$nonstandardised){
         bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
       } else {
         bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
       }
-      spe.bray.ward <- demoflex.hcl
-      spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-      grp.lev <- levels(factor(spe.bw.groups))
+      cutclusters <- cutree(chopedtree.hcl, k=input$group)
+      grp.lev <- levels(factor(cutclusters))
       sit.sc <- scores(bci.mds)
-      siteind<-as.data.frame(cbind(spe.bw.groups))
+      siteind<-as.data.frame(cbind(cutclusters))
       siteind<-as.character(siteind)
-      dend<-as.dendrogram(demoflex.hcl)
+      dend<-as.dendrogram(chopedtree.hcl)
       labels_colors(dend) <- c(as.numeric(siteind) + 1)
       plot(dend, ylab = "Height", xlab="Site", cex=0.7)
-      rect.hclust(demoflex.hcl, k= input$group, border = 1+c(1:length(grp.lev)))
+      rect.hclust(chopedtree.hcl, k= input$group, border = 1+c(1:length(grp.lev)))
     }
     )
   
@@ -594,16 +646,15 @@ server <- function(input, output, session){
       } else {
         bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
       }
-      demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
-      demoflex.hcl <- as.hclust(demoflex)
+      chopedtree <- agnes(bc,method='flexible',par.method= FlexBeta)
+      chopedtree.hcl <- as.hclust(chopedtree)
       if (input$nonstandardised){
         bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
       } else {
         bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
       }
-      spe.bray.ward <- demoflex.hcl
-      spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-      grp.lev <- levels(factor(spe.bw.groups))
+      cutclusters <- cutree(chopedtree.hcl, k=input$group)
+      grp.lev <- levels(factor(cutclusters))
       sit.sc <- scores(bci.mds)
       p5 <- ordiplot(sit.sc, type="n", main="NMS Ordination", display = 'si', ylim=c(-2.3,2.3), xlim=c(-2.2,2.2),xlab="",ylab="")
       title(ylab="NMDS 2", line=2.5, cex.lab=0.7, xlab="NMDS 1")
@@ -623,13 +674,13 @@ server <- function(input, output, session){
         ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var2]]), Environmental_Matrix, knots = 1, add = TRUE, col="green")
       }
       for (i in 1:length(grp.lev))
-      {points(sit.sc[spe.bw.groups==i,], pch=(14+i), cex=2, col=i+1)}
-      ordicluster(p5, spe.bray.ward, col="dark grey", lty=2)     # Add the dendrogram
+      {points(sit.sc[cutclusters==i,], pch=(14+i), cex=2, col=i+1)}
+      ordicluster(p5, chopedtree.hcl, col="dark grey", lty=2)     # Add the dendrogram
       ### Add a legend interactively
       #legend(locator(1), paste("Group",c(1:length(grp.lev))), pch=14+c(1:length(grp.lev)), col=1+c(1:length(grp.lev)), pt.cex=0.75, cex = 0.5, ncol=3)
       points(bci.mds, display = "species", cex = 0.7, pch=21, col="red", bg="yellow")
       ordipointlabel(bci.mds, display = "species", add = TRUE, cex = 0.7, scaling = 8)
-      ordihull (bci.mds, groups = spe.bw.groups, show.group = 1:input$group, col = c("red","green","blue","lightblue","pink","yellow","grey"), draw = 'polygon', label = T, lty=3, cex=0.4, alpha = 0.05)
+      ordihull (bci.mds, groups = cutclusters, show.group = 1:input$group, col = c("red","green","blue","lightblue","pink","yellow","grey"), draw = 'polygon', label = T, lty=3, cex=0.4, alpha = 0.05)
     }, height = 1000, width = 1200)
   
   ####PDF####
@@ -643,16 +694,15 @@ server <- function(input, output, session){
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
-    demoflex <- agnes(bc,method='flexible',par.method= FlexBeta)
-    demoflex.hcl <- as.hclust(demoflex)
+    chopedtree <- agnes(bc,method='flexible',par.method= FlexBeta)
+    chopedtree.hcl <- as.hclust(chopedtree)
     if (input$nonstandardised){
       bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
     } else {
       bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
     }
-    spe.bray.ward <- demoflex.hcl
-    spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-    grp.lev <- levels(factor(spe.bw.groups))
+    cutclusters <- cutree(chopedtree.hcl, k=input$group)
+    grp.lev <- levels(factor(cutclusters))
     sit.sc <- scores(bci.mds)
     p5 <- ordiplot(sit.sc, type="n", main="NMS Ordination", display = 'si', ylim=c(-2.3,2.3), xlim=c(-2.2,2.2),xlab="",ylab="")
     title(ylab="NMDS 2", line=2.5, cex.lab=0.7, xlab="NMDS 1")
@@ -672,12 +722,12 @@ server <- function(input, output, session){
       ordisurf(bci.mds ~ as.vector(Environmental_Matrix[[input$var2]]), Environmental_Matrix, knots = 1, add = TRUE, col="green")
     }
     for (i in 1:length(grp.lev))
-    {points(sit.sc[spe.bw.groups==i,], pch=(14+i), cex=2, col=i+1)}
-    ordicluster(p5, spe.bray.ward, col="dark grey", lty=2)     # Add the dendrogram
+    {points(sit.sc[cutclusters==i,], pch=(14+i), cex=2, col=i+1)}
+    ordicluster(p5, chopedtree.hcl, col="dark grey", lty=2)     # Add the dendrogram
     #legend(locator(1), paste("Group",c(1:length(grp.lev))), pch=14+c(1:length(grp.lev)), col=1+c(1:length(grp.lev)), pt.cex=0.75, cex = 0.5, ncol=3)
     points(bci.mds, display = "species", cex = 0.7, pch=21, col="red", bg="yellow")
     ordipointlabel(bci.mds, display = "species", add = TRUE, cex = 0.7, scaling = 8)
-    ordihull (bci.mds, groups = spe.bw.groups, show.group = 1:input$group, col = c("red","green", "blue","lightblue","pink","yellow","grey"), draw = 'polygon', label = F, lty=3,cex=0.4, alpha = 0.1)
+    ordihull (bci.mds, groups = cutclusters, show.group = 1:input$group, col = c("red","green", "blue","lightblue","pink","yellow","grey"), draw = 'polygon', label = F, lty=3,cex=0.4, alpha = 0.1)
     #dev.off()
   }
   
@@ -758,10 +808,10 @@ server <- function(input, output, session){
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
-    demoflex <- agnes(bc,method='flexible',par.method=FlexBeta)
-    demoflex.hcl <- as.hclust(demoflex)
-    corr <- cor(bc,cophenetic(demoflex.hcl))
-    plot(bc, cophenetic(demoflex.hcl), asp=1, main = paste("Cophentic Correlation =", corr), ylab=NULL)
+    chopedtree <- agnes(bc,method='flexible',par.method=FlexBeta)
+    chopedtree.hcl <- as.hclust(chopedtree)
+    corr <- cor(bc,cophenetic(chopedtree.hcl))
+    plot(bc, cophenetic(chopedtree.hcl), asp=1, main = paste("Cophentic Correlation =", corr), ylab=NULL)
     abline(0, 1)
   })
   
@@ -782,14 +832,13 @@ server <- function(input, output, session){
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
-    demoflex <- agnes(bc,method='flexible',par.method=FlexBeta)
-    demoflex.hcl <- as.hclust(demoflex)
-    spe.bray.ward <- demoflex.hcl
-    spe.bw.groups <- cutree(spe.bray.ward, k= input$group)
-    grp.lev <- levels(factor(spe.bw.groups))
+    chopedtree <- agnes(bc,method='flexible',par.method=FlexBeta)
+    chopedtree.hcl <- as.hclust(chopedtree)
+    cutclusters <- cutree(chopedtree.hcl, k= input$group)
+    grp.lev <- levels(factor(cutclusters))
     sit.sc <- scores(bci.mds)
     for (i in 1:length(grp.lev))
-    {points(sit.sc[spe.bw.groups==i,], pch=(14+i), cex=gof*110, col=i+1)}
+    {points(sit.sc[cutclusters==i,], pch=(14+i), cex=gof*110, col=i+1)}
     text(bci.mds, display="sites", cex=0.6, pos=1)
   })
   
@@ -803,13 +852,12 @@ server <- function(input, output, session){
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
-    demoflex <- agnes(bc,method='flexible',par.method=FlexBeta)
-    demoflex.hcl <- as.hclust(demoflex)
-    spe.bray.ward <- demoflex.hcl
-    spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-    grp.lev <- levels(factor(spe.bw.groups))
+    chopedtree <- agnes(bc,method='flexible',par.method=FlexBeta)
+    chopedtree.hcl <- as.hclust(chopedtree)
+    cutclusters <- cutree(chopedtree.hcl, k=input$group)
+    grp.lev <- levels(factor(cutclusters))
     spe.sc <- wascores(Species_Matrix, bc)
-    cl <- cutree(demoflex.hcl, k=input$group)
+    cl <- cutree(chopedtree.hcl, k=input$group)
     const(Species_Matrix, cl)
     importance(Species_Matrix, cl)
     mod <- indval(Species_Matrix, as.numeric(cl))
@@ -836,18 +884,17 @@ server <- function(input, output, session){
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
-    demoflex <- agnes(bc,method='flexible',par.method=FlexBeta)
-    demoflex.hcl <- as.hclust(demoflex)
+    chopedtree <- agnes(bc,method='flexible',par.method=FlexBeta)
+    chopedtree.hcl <- as.hclust(chopedtree)
     if (input$nonstandardised){
       bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
     } else {
       bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
     }
-    spe.bray.ward <- demoflex.hcl
-    spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-    grp.lev <- levels(factor(spe.bw.groups))
+    cutclusters <- cutree(chopedtree.hcl, k=input$group)
+    grp.lev <- levels(factor(cutclusters))
     sit.sc <- scores(bci.mds)
-    pca3d(sit.sc, group=spe.bw.groups,show.plane=TRUE,fancy=TRUE)
+    pca3d(sit.sc, group=cutclusters,show.plane=TRUE,fancy=TRUE)
   })
   
   output$ThreeDend <- renderPlot({
@@ -858,16 +905,15 @@ server <- function(input, output, session){
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
-    demoflex <- agnes(bc,method='flexible',par.method=FlexBeta)
-    demoflex.hcl <- as.hclust(demoflex)
+    chopedtree <- agnes(bc,method='flexible',par.method=FlexBeta)
+    chopedtree.hcl <- as.hclust(chopedtree)
     if (input$nonstandardised){
       bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
     } else {
       bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
     }
-    spe.bray.ward <- demoflex.hcl
-    spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-    orditree3d(bci.mds, demoflex.hcl, display = "sites", type = "t", col = as.numeric(spe.bw.groups+1), choices = 1:2, cex=0.9)
+    cutclusters <- cutree(chopedtree.hcl, k=input$group)
+    orditree3d(bci.mds, chopedtree.hcl, display = "sites", type = "t", col = as.numeric(cutclusters+1), choices = 1:2, cex=0.9)
   })
   
   output$ThreeDim <- renderPlot({
@@ -913,25 +959,24 @@ server <- function(input, output, session){
     } else {
       bc <-vegdist(Species_Matrix, method=input$Distance, binary=F)
     }
-    demoflex <- agnes(bc,method='flexible',par.method=FlexBeta)
-    demoflex.hcl <- as.hclust(demoflex)
+    chopedtree <- agnes(bc,method='flexible',par.method=FlexBeta)
+    chopedtree.hcl <- as.hclust(chopedtree)
     if (input$nonstandardised){
       bci.mds<-metaMDS(decostand(Species_Matrix, method=input$Standardisation, na.rm= F), distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
     } else {
       bci.mds<-metaMDS(Species_Matrix, distance =input$Distance, binary=F, k = 3 , trymax = 500, autotransform = F, noshare = F, expand = T, trace = 1, plot = FALSE, itr=1000)
     }
-    spe.bray.ward <- demoflex.hcl
-    spe.bw.groups <- cutree(spe.bray.ward, k=input$group)
-    grp.lev <- levels(factor(spe.bw.groups))
+    cutclusters <- cutree(chopedtree.hcl, k=input$group)
+    grp.lev <- levels(factor(cutclusters))
     spe.sc <- wascores(Species_Matrix, bc)
-    cl <- cutree(demoflex.hcl, k=input$group)
+    cl <- cutree(chopedtree.hcl, k=input$group)
     si <- silhouette (cl, bc)
     silo<-sortSilhouette(si)
-    order<-as.data.frame(spe.bw.groups)
+    order<-as.data.frame(cutclusters)
     order<-tibble::rownames_to_column(order)
-    order <- order[order(order$spe.bw.groups),] 
+    order <- order[order(order$cutclusters),] 
     rownames(order)<-order$rowname
-    plot(silo, col=order$spe.bw.groups+1, main = expression(paste("Silhouette plot of Group Membership - Flexible"~beta~"=", paste(FlexBeta()), "Dissimilarity/Distance = ", paste(input$Distance))), cex.names=0.8, nmax.lab=100)
+    plot(silo, col=order$cutclusters+1, main = expression(paste("Silhouette plot of Group Membership - Flexible"~beta~"=", paste(FlexBeta()), "Dissimilarity/Distance = ", paste(input$Distance))), cex.names=0.8, nmax.lab=100)
   })
 }
 
