@@ -74,7 +74,3 @@ Add any other context about the problem here.
 Thanks for checking this out!
 
 [![ko-fi](https://www.ko-fi.com/img/donate_sm.png)](https://ko-fi.com/Y8Y1LROG)
-
-Want to say cheers? :beers:!
-
-[![Beerpay](https://beerpay.io/marsnone/VEGDESK/badge.svg?style=beer-square)](https://beerpay.io/marsnone/VEGDESK)  [![Beerpay](https://beerpay.io/marsnone/VEGDESK/make-wish.svg?style=flat-square)](https://beerpay.io/marsnone/VEGDESK?focus=wish)
